@@ -1,0 +1,130 @@
+from bs4 import BeautifulSoup
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.common.keys import Keys
+import time
+import os
+import pandas as pd
+
+
+print("============================================================================================================")
+print("유튜브 댓글 추출")
+print("============================================================================================================")
+keyword = input("1. 검색할 키워드를 입력하세요: ")
+num_videos = int(input("2. 크롤링할 영상 개수를 입력하세요: "))
+num_comments = int(input("3. 각 영상에서 추출할 댓글 개수를 입력하세요: "))
+f_dir = input("4.결과 파일을 저장할 폴더명만 쓰세요(예:c:\\data\\):")
+# keyword = "떡볶이"
+# num_videos = 3
+# num_comments = 2
+# f_dir = "c:\\data\\"
+
+n = time.localtime()
+s = "%04d-%02d-%02d-%02d-%02d-%02d" % (n.tm_year, n.tm_mon, n.tm_mday, n.tm_hour, n.tm_min, n.tm_sec)
+
+os.makedirs(f_dir + s + "-" + keyword)
+os.chdir(f_dir + s + "-" + keyword)
+
+ft_name=f_dir+s+'-'+keyword+'\\'+s+'-'+keyword+'.txt'
+fc_name=f_dir+s+'-'+keyword+'\\'+s+'-'+keyword+'.csv'
+fx_name=f_dir+s+'-'+keyword+'\\'+s+'-'+keyword+'.xls'
+
+path = "C:\Temp\chromedriver_win32\chromedriver.exe"
+driver = webdriver.Chrome(path)
+driver.get("http://youtube.com")
+
+# 유튜브 검색 입력란 찾기
+search_box = driver.find_element(By.NAME, "search_query")
+# 검색어 입력
+search_box.send_keys(keyword)
+search_box.send_keys(Keys.RETURN)
+time.sleep(2)
+
+# 영상 링크 저장할 리스트 초기화
+video_links = []
+
+full_html = driver.page_source
+
+soup = BeautifulSoup(full_html, 'html.parser')
+
+video_renderers = soup.find_all("ytd-video-renderer", class_="style-scope ytd-item-section-renderer")
+
+for video_renderer in video_renderers:
+    thumbnail = video_renderer.find("ytd-thumbnail", class_="style-scope ytd-video-renderer")
+    thumbnail_link = thumbnail.find("a", class_="yt-simple-endpoint inline-block style-scope ytd-thumbnail").get("href")
+    video_links.append(thumbnail_link)
+    
+    
+video_count = 0
+writers = []
+comments = []
+dates = []
+urls = []
+video_num_list = []
+comment_num_list = []
+
+# num_videos 개수만큼 영상 크롤링
+for i, video_link in enumerate(video_links[:num_videos]):
+    new_link = "http://youtube.com" + video_link
+    driver.get(new_link)
+    time.sleep(2)
+    video_count += 1
+    comment_count = 0
+    # 페이지 스크롤 다운
+    while len(comments) < num_comments * num_videos:
+        # 현재 페이지의 HTML 소스 가져오기
+        page_source = driver.page_source
+        soup = BeautifulSoup(page_source, "html.parser")
+
+        # 댓글 추출
+        comment_elements = soup.find_all("ytd-comment-thread-renderer")
+        for k in comment_elements:
+            if comment_count >= num_comments:
+                break
+            kk = k.find('ytd-comment-renderer').find('div', id='body').find('div', id='main')
+            writer = kk.find('div', id='header').find('div', id='header-author').find('h3').get_text()
+            writers.append(writer.strip())
+            print("작성자: ", writer.strip())
+
+            date = kk.find('div', id='header').find('div', id='header-author').find('yt-formatted-string', class_='published-time-text style-scope ytd-comment-renderer').get_text()
+            dates.append(date.strip())
+            print("작성일자: ", date.strip())
+
+            comment = kk.find('div', id='comment-content').get_text()
+            comments.append(comment.strip())
+            print("내용: ", comment.strip())
+
+            urls.append(new_link)
+            comment_count += 1
+            video_num_list.append(video_count)
+            comment_num_list.append(comment_count)
+            
+        if comment_count >= num_comments:
+            break
+
+        driver.find_element(By.TAG_NAME, "body").send_keys(Keys.END)
+        time.sleep(2)
+
+
+df = pd.DataFrame()
+
+df['영상번호'] = video_num_list
+df['댓글번호'] = comment_num_list
+df['작성자'] = writers
+df['작성일자'] = dates
+df['내용'] = comments
+df['url'] = urls
+
+with open(ft_name, 'w', encoding='utf-8') as file:
+    for i in range(len(urls)):
+        file.write(str(video_num_list[i]) + '번째 영상 ' + str(comment_num_list[i]) + '번째 댓글입니다. =============')
+        file.write('1. 작성자: ' + writers[i] + '\n')
+        file.write('2. 작성일자: ' + dates[i] + '\n')
+        file.write('3. 내용: ' + comments[i] + '\n')
+        file.write('4. 영상url: ' + urls[i] + '\n')
+        
+        file.write('\n')
+
+df.to_csv(fc_name, encoding="utf-8-sig", index=False)
+df.to_excel(fx_name, index=False)
+print("추출을 완료했습니다.")
