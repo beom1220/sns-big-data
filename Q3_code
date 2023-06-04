@@ -1,0 +1,85 @@
+from bs4 import BeautifulSoup     
+from selenium import webdriver
+from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.common.by import By
+from selenium.webdriver.common.action_chains import ActionChains
+import time
+import sys
+import pandas as pd
+import xlwt
+import os
+import requests
+import urllib.request
+
+print("============================================================================================================")
+print("pixabay 사이트에서 이미지를 검색하여 수집하는 크롤러입니다.")
+print("============================================================================================================")
+# keyword = input('1. 크롤링할 키워드는 무엇입니까?(예:여행): ')
+# num = int(input('2. 크롤링할 건수는 몇 건입니까?: '))
+keyword = "고양이"
+num = 150
+
+# f_dir = input("3.결과 파일을 저장할 폴더명만 쓰세요(예:c:\\data\\):")
+f_dir = "c:\\data\\"
+
+n = time.localtime()
+s = '%04d-%02d-%02d-%02d-%02d-%02d' % (n.tm_year, n.tm_mon, n.tm_mday, n.tm_hour, n.tm_min, n.tm_sec)
+
+os.makedirs(f_dir+s+'-'+keyword)
+os.chdir(f_dir+s+'-'+keyword)
+
+path = "C:\Temp\chromedriver_win32\chromedriver.exe"
+driver = webdriver.Chrome(path)
+driver.get("https://pixabay.com/ko/")
+
+time.sleep(2)
+
+driver.find_element(By.NAME, 'search').click()
+driver.find_element(By.NAME, 'search').send_keys(keyword)
+driver.find_element(By.NAME, 'search').submit()
+time.sleep(2)
+
+count = 0
+pagi = 2
+
+while count < num:
+    time.sleep(2)
+    
+    body = driver.find_element(By.CSS_SELECTOR, 'body')
+    body.send_keys(Keys.END)
+    time.sleep(2)
+    
+    full_html = driver.page_source
+    
+    soup = BeautifulSoup(full_html, 'html.parser')
+    
+    images = soup.find_all('img')
+    
+    first_pass = 0
+    
+    for img in images:
+        time.sleep(2)
+        if first_pass == 0:
+            first_pass += 1
+            continue
+        try:
+            img_url = img.get('src')
+            file_name = str(count) + ".jpg"
+            print(img_url)
+            response = requests.get(img_url)
+            with open(f_dir+s+'-'+keyword+'\\'+file_name, 'wb') as f:
+                f.write(response.content)
+            print(count, "번째 이미지 다운로드 완료.")
+            count += 1
+
+            if count >= num:
+                break
+        except:
+            print("이미지 로딩에 실패했습니다.")
+    if count < num:
+        next_url = "https://pixabay.com/ko/images/search/" + keyword + "/?pagi=" + str(pagi)
+        pagi += 1
+        driver.get(next_url)
+        
+driver.quit()
+print("이미지 다운로드가 완료되었습니다.")
