@@ -1,0 +1,152 @@
+from bs4 import BeautifulSoup     
+from selenium import webdriver
+from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.common.by import By
+from selenium.webdriver.common.action_chains import ActionChains
+import time
+import sys
+import pandas as pd
+import xlwt
+import os
+
+print("============================================================================================================")
+print("연습문제 6-5: 네이버 블로그 크롤러 : 페이지를 변경하면서 크롤링 후 요약 내용 저장하기")
+print("============================================================================================================")
+keyword = input('1. 크롤링할 키워드는 무엇입니까?(예:여행): ')
+includeWord = list(input('''2. 포함할 키워드를 입력하세요:(예:국내,국외)(없으면 엔터)''').split(','))
+exceptWord = list(input('''3. 제외할 키워드를 입력하세요:(예:국내,국외)(없으면 엔터)''').split(','))
+startDate = input('4. 조회를 시작할 날짜를 입력하세요.(예:20170101):')
+endDate = input('5. 조회를 종료할 날짜를 입력하세요.(예:20171231):')
+num = int(input('6. 크롤링할 건수는 몇 건입니까?(최대 1000건): '))
+# keyword = "여행"
+# includeWord = ["공항", "여권"]
+# exceptWord = ["베트남", "필리핀"]
+# startDate = "20170301"
+# endDate = "20200201"
+# num = 33
+
+scroll_count = int(num / 30)
+
+f_dir = input("7.결과 파일을 저장할 폴더명만 쓰세요(예:c:\\data\\):")
+# f_dir = "c:\\data\\"
+
+n = time.localtime()
+s = '%04d-%02d-%02d-%02d-%02d-%02d' % (n.tm_year, n.tm_mon, n.tm_mday, n.tm_hour, n.tm_min, n.tm_sec)
+
+os.makedirs(f_dir+s+'-'+keyword)
+os.chdir(f_dir+s+'-'+keyword)
+
+ft_name=f_dir+s+'-'+keyword+'\\'+s+'-'+keyword+'.txt'
+fc_name=f_dir+s+'-'+keyword+'\\'+s+'-'+keyword+'.csv'
+fx_name=f_dir+s+'-'+keyword+'\\'+s+'-'+keyword+'.xls'
+
+path = "C:\Temp\chromedriver_win32\chromedriver.exe"
+driver = webdriver.Chrome(path)
+driver.get("https://www.naver.com")
+time.sleep(2)
+
+baseUrl = "https://search.naver.com/search.naver?where=nexearch&sm=top_hty&fbm=0&ie=utf8&query=" + keyword
+if includeWord is not None:
+    baseUrl = baseUrl + '+%2B' + '+%2B'.join(includeWord)
+if exceptWord is not None:
+    baseUrl = baseUrl + '+-' + '+-'.join(exceptWord)
+periodUrl = baseUrl + "&sm=tab_opt&nso=p%3Afrom" + startDate + "to" + endDate
+
+driver.get(periodUrl)
+
+time.sleep(2)
+driver.find_element(By.LINK_TEXT,"VIEW").click()
+
+time.sleep(2)
+driver.find_element(By.LINK_TEXT,"블로그").click()
+
+for _ in range(scroll_count):
+    body = driver.find_element(By.CSS_SELECTOR, 'body')
+    body.send_keys(Keys.END)
+    time.sleep(2)
+    
+full_html = driver.page_source
+
+soup = BeautifulSoup(full_html, 'html.parser')
+
+content_list = soup.find('ul',class_='lst_total')
+
+no=1
+url_list = []
+
+for i in content_list.find_all('li', "bx"):
+    if no <= num:
+        url = i.find('a', 'api_txt_lines total_tit').get_text()
+        url = i.find('a', 'api_txt_lines total_tit').get("href")
+        url_list.append(url)
+        no += 1
+    else:
+        break
+
+no = 1
+no_list = []
+titles = []
+writers = []
+dates = []
+contents = []
+if url_list is not None:
+    for i in url_list:
+        driver.get(i)
+        time.sleep(2)
+        
+        no_list.append(no)
+        no += 1
+        
+        driver.switch_to.frame('mainFrame')
+        
+        soup = BeautifulSoup(driver.page_source, 'html.parser')
+        
+        title = soup.find('div', 'pcol1')
+        if title is None:
+            title = soup.find('div', 'htitle')
+        title = title.get_text()
+        titles.append(title)
+        
+        writer = soup.find('span', 'nick')
+        if writer is None:
+            writer = soup.find('div', 'nick')
+        writer = writer.get_text()
+        writers.append(writer)
+        
+        date = soup.find('span', 'se_publishDate pcol2')
+        if date is None:
+            date = soup.find('p', 'date fil5 pcol2 _postAddDate')
+        date = date.get_text()
+        dates.append(date)
+        
+        content = soup.find('div', 'se-main-container')
+        if content is None:
+            content = soup.find('div', id='postViewArea')
+        if content is None:
+            content = soup.find('div', 'se_component_wrap sect_dsc __se_component_area')
+        content = content.get_text()
+        content = content.replace("\n", "")
+        contents.append(content)
+        
+df = pd.DataFrame()
+df['제목'] = titles
+df['블로그 주소'] = url_list
+df['작성자'] = writers
+df['작성일자'] = dates
+df['블로그 내용'] = contents
+
+with open(ft_name, 'w', encoding='utf-8') as file:
+    for i in range(len(no_list)):
+        file.write('총 '+ str(num) + '건 중 ' + str(no_list[i]) + '번째 블로그 데이터를 수집합니다. =============')
+        file.write('1. 제목: ' + titles[i] + '\n')
+        file.write('2. 블로그 주소: ' + url_list[i] + '\n')
+        file.write('3. 작성자: ' + writers[i] + '\n')
+        file.write('4. 작성일자: ' + dates[i] + '\n')
+        file.write('5. 블로그 내용: ' + contents[i] + '\n')
+        
+        file.write('\n')
+
+df.to_excel(fx_name, index=False)
+df.to_csv(fc_name, index=False)
+        
+print(" 요청하신 데이터 수집 작업이 정상적으로 완료되었습니다")

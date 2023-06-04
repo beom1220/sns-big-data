@@ -1,0 +1,125 @@
+from bs4 import BeautifulSoup     
+from selenium import webdriver
+from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.common.by import By
+import time
+import sys
+import pandas as pd
+import xlwt
+import os
+
+query_txt = input('1. 공고명으로 검색할 키워드는 무엇입니까?: ')
+from_date = input('2. 조회 시작일자 입력(예:2019/01/01): ')
+to_date = input('3. 조회 종료일자 입력(예:2019/01/01): ')
+# query_txt = "캠프"
+# from_date = "2019/01/01"
+# to_date = "2019/10/30"
+
+f_dir = input("3.결과 파일을 저장할 폴더명만 쓰세요(예:c:\\data\\):")
+# f_dir = "c:\\data\\"
+
+n = time.localtime()
+s = '%04d-%02d-%02d-%02d-%02d-%02d' % (n.tm_year, n.tm_mon, n.tm_mday, n.tm_hour, n.tm_min, n.tm_sec)
+
+os.makedirs(f_dir+s+'-'+query_txt)
+os.chdir(f_dir+s+'-'+query_txt)
+
+ft_name=f_dir+s+'-'+query_txt+'\\'+s+'-'+query_txt+'.txt'
+fc_name=f_dir+s+'-'+query_txt+'\\'+s+'-'+query_txt+'.csv'
+fx_name=f_dir+s+'-'+query_txt+'\\'+s+'-'+query_txt+'.xls'
+
+path = "C:\Temp\chromedriver_win32\chromedriver.exe"
+driver = webdriver.Chrome(path)
+driver.get("https://www.g2b.go.kr/index.jsp")
+time.sleep(2)
+
+element = driver.find_element(By.ID,"bidNm")
+element.send_keys(query_txt)
+fromDate = driver.find_element(By.ID, "fromBidDt")
+fromDate.click()
+fromDate.send_keys(Keys.CONTROL + "A")
+fromDate.send_keys(from_date)
+toDate = driver.find_element(By.ID, "toBidDt")
+toDate.send_keys(Keys.CONTROL + "A")
+toDate.send_keys(to_date)
+toDate.send_keys(to_date)
+driver.find_element(By.LINK_TEXT, "검색").click()
+
+time.sleep(4)
+
+# =================================== 여기까지가 검색 ====================================
+driver.switch_to.frame('sub')
+
+frameset_frame = driver.find_element(By.NAME, 'main')
+driver.switch_to.frame(frameset_frame)
+
+table = driver.find_element(By.CLASS_NAME, 'table_list_tbidTbl')
+tbody = table.find_element(By.TAG_NAME, 'tbody')
+rows = tbody.find_elements(By.TAG_NAME, 'tr')
+
+no = 1
+no_list = []
+col1 = []
+col2 = []
+col3 = []
+col4 = []
+col5 = []
+col6 = []
+col7 = []
+col8 = []
+col9 = []
+col10 = []
+col11 = []
+
+for index, value in enumerate(rows):
+    cells = value.find_elements(By.TAG_NAME, 'td')
+    no_list.append(no)
+    col1.append(cells[0].text)
+    col2.append(cells[1].text)
+    col3.append(cells[2].text)
+    div_element = cells[3].find_element(By.TAG_NAME, 'div')
+    a_element = div_element.find_element(By.TAG_NAME, 'a')
+    col4.append(a_element.text)
+    col5.append(a_element.get_attribute("href"))
+    col6.append(cells[4].text)
+    col7.append(cells[5].text)
+    col8.append(cells[6].text)
+    col9.append(cells[7].text)
+    col10.append(cells[8].text)
+    col11.append(cells[9].text)
+    no += 1
+
+    
+df = pd.DataFrame()
+df['업무'] = col1
+df['공고번호-차수'] = col2
+df['분류'] = col3
+df['공고명'] = col4
+df['URL 주소'] = col5
+df['공고기관'] = col6
+df['수요기관'] = col7
+df['계약방법'] = col8
+df['입력일시(입찰마감일시)'] = col9
+df['공동수급'] = col10
+df['투찰여부'] = col11
+
+with open(ft_name, 'w', encoding='utf-8') as file:
+    for i in range(len(no_list)):
+        file.write(str(no_list[i]) + '번째 공고내용 추출합니다. ~~~~\n')
+        file.write('1. 업무: ' + col1[i] + '\n')
+        file.write('2. 공고번호-차수: ' + col2[i] + '\n')
+        file.write('3. 분류: ' + col3[i] + '\n')
+        file.write('4. 공고명: ' + col4[i] + '\n')
+        file.write('5. URL 주소: ' + col5[i] + '\n')
+        file.write('6. 공고기관: ' + col6[i] + '\n')
+        file.write('7. 수요기관: ' + col7[i] + '\n')
+        file.write('8. 계약방법: ' + col8[i] + '\n')
+        file.write('9. 입력일시(입찰마감일시): ' + col9[i] + '\n')
+        file.write('10. 공동수급: ' + col10[i] + '\n')
+        file.write('11. 투찰여부: ' + col11[i] + '\n')
+        
+        file.write('\n')
+
+df.to_excel(fx_name, index=False)
+df.to_csv(fc_name, index=False)
+print("추출이 완료되었습니다.")
