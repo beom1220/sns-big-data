@@ -121,5 +121,5 @@ with open(ft_name, 'w', encoding='utf-8') as file:
         file.write('\n')
 
 df.to_excel(fx_name, index=False)
-df.to_csv(fc_name, index=False)
+df.to_csv(fc_name, encoding="utf-8-sig", index=False)
 print("추출이 완료되었습니다.")
