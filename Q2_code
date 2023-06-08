@@ -147,6 +147,6 @@ with open(ft_name, 'w', encoding='utf-8') as file:
         file.write('\n')
 
 df.to_excel(fx_name, index=False)
-df.to_csv(fc_name, index=False)
+df.to_csv(fc_name, encoding="utf-8-sig", index=False)
         
 print(" 요청하신 데이터 수집 작업이 정상적으로 완료되었습니다")
